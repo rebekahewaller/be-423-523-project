@@ -29,6 +29,8 @@ import math as m
 from scipy import optimize, stats
 import datetime as dt
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
 
 def location_input():
     """
@@ -145,11 +147,11 @@ def roof_measurements():
     
     # make arrays for east and west roof sections
     x_west = roof['x_west']
-    y_west = roof['y_west']
+    z_west = roof['z_west']
     x_east = roof['x_east']
-    y_east = roof['y_east']
+    z_east = roof['z_east']
     
-    return x_west, y_west, x_east, y_east
+    return x_west, z_west, x_east, z_east
     
 def test_func(x, a, b, c, d):
     """
@@ -161,25 +163,58 @@ def curve_fit():
     """
     Fit roof measurements to curve with curve fit function
     """
-    x_west, y_west, x_east, y_east = roof_measurements()
+    x_west, z_west, x_east, z_east = roof_measurements()
     
     # find best curve fit for west roof section
-    param_west, param_cov_west = optimize.curve_fit(test_func, x_west, y_west)
-    y_west_fitted = test_func(x_west,*param_west)
+    param_west, param_cov_west = optimize.curve_fit(test_func, x_west, z_west)
+    print(param_west)
+    
+    # z = 7.29944696 + (1.27415518*x) + (-0.0680139854*x**2) + (0.00152035861*x**3)
+    
+    z_west_fitted = test_func(x_west,*param_west)
     
     # mirror curve for east roof section
-    y_east_fitted = np.flip(y_west_fitted,axis=0)
+    z_east_fitted = np.flip(z_west_fitted,axis=0)
     
     # create array for both west and east roof sections
     x_whole_roof = np.concatenate((x_west, x_east), axis=0)
-    y_whole_roof = np.concatenate((y_west_fitted, y_east_fitted), axis=0)
+    z_whole_roof = np.concatenate((z_west_fitted, z_east_fitted), axis=0)
 
     # plot roof
-    plt.plot(x_whole_roof, y_whole_roof, '-', color ='blue', label="roof curve") 
+    plt.plot(x_whole_roof, z_whole_roof, '-', color ='blue', label="roof curve") 
     plt.axis('equal') # make axes square
     plt.show() 
 
+    return x_whole_roof, z_whole_roof
 
+def section_coordinates():
+    """
+    Create array for x, y, z coordinates for 1 ft square sections of greenhouse footprint
+    """
+    
+    gh_width = 30 # in feet
+    gh_length = 48 # in feet
+    
+    xvalues = np.linspace(0,gh_width,num=gh_width+1) # array for width
+    yvalues = np.linspace(0,gh_length,num=gh_length+1) # array for height
+    zvalues_west = np.zeros(16) # array for height
+    
+    for i in range(0,16):
+        zvalues_west[i] = 7.29944696 + (1.27415518*xvalues[i]) + (-0.0680139854*xvalues[i]**2) + (0.00152035861*xvalues[i]**3)
+        i += 1
+    
+    zvalues_east = np.flip(zvalues_west, axis=0)
+    zvalues_west = zvalues_west[:-1]
+    zvalues = np.concatenate((zvalues_west, zvalues_east), axis=0)
+    
+    xx, yy = np.meshgrid(xvalues, yvalues)
+    xz, zz = np.meshgrid(xvalues, zvalues)
+    
+    plt.plot(xx, yy, marker='.', color='k', linestyle='none')
+    plt.axis('equal')
+    plt.show() 
+    
+    
 def mesh_size():
     """
     Create mesh for sand bed (grow area) in OPV greenhouse
