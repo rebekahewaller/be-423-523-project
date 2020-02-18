@@ -19,6 +19,7 @@ Created on Wed Feb  5 21:16:43 2020
 
 # GROWTH - determine growth (biomass & fruit) for lettuce and tomato plants
 # based on daily light integral (DLI) under shade and non-shade treatment
+# 
 
 
 # direct radiation
@@ -66,7 +67,7 @@ def time_input():
 
 def solar_model():
     """
-    The function calculates for zenith angle and azimuth angle in radians.
+    The function calculates for zenith angle and azimuth angle in radians for horizontal surface.
     time: (doy)
     starting_DOY:starting day for the simulation
     year: the year of the simulation
@@ -115,6 +116,7 @@ def solar_model():
     else:
         Omega = TST/4 - 180   
     Omega_r = m.radians(Omega)
+     
     cos_Zenith = np.sin(lat_r) * np.sin(Delta_r) + np.cos(lat_r) * np.cos(Delta_r) * np.cos(Omega_r)
     Zenith_r = np.arccos(cos_Zenith)             #in radians
     Aprime_r = np.arccos((np.sin(lat_r) * np.cos(Zenith_r) - np.sin(Delta_r)) / (np.cos(lat_r) * np.sin(Zenith_r)))
@@ -124,7 +126,18 @@ def solar_model():
     else:
         Azimuth = (540 - Aprime) % 360   #in degrees                
     Azimuth_r = Azimuth / 180 * np.pi
-    return Zenith_r, Azimuth_r
+    Elev_angle = (np.pi)/2 - Zenith_r
+
+    
+    # calculate incidence angle
+    # Beta is equal to angle of tilted surface to horizontal (in radians)
+    Beta = 45 # in degrees
+    Beta_r = m.radians(Beta)
+    
+    cos_incidence = np.sin(Delta_r)* np.sin(lat_r) * np.cos(Beta_r) - np.sin(Delta_r) * np.cos(lat_r) * np.sin(Beta_r) * np.cos(Azimuth_r) + np.cos(Delta_r) * np.cos(lat_r) * np.cos(Beta_r) * np.cos(Omega_r) + np.cos(Delta_r) * np.sin(lat_r) * np.sin(Beta_r) * np.cos(Azimuth_r) * np.cos(Omega_r) + np.cos(Delta_r) * np.sin(Beta_r) * np.sin(Azimuth_r) * np.sin(Omega_r)                      
+    incidence_ang_r = np.arccos(cos_incidence)
+    
+    return Delta_r, lat_r, Omega_r, Zenith_r, Azimuth_r, Elev_angle
 
 def greenhouse_orientation():
     """ 
@@ -185,38 +198,61 @@ def curve_fit():
     plt.axis('equal') # make axes square
     plt.show() 
 
-    return x_whole_roof, z_whole_roof
+    return param_west
 
 def section_coordinates():
     """
     Create array for x, y, z coordinates for 1 ft square sections of greenhouse footprint
     """
     
-    gh_width = 30 # in feet
+    gh_width = 30.0 # in feet
+    gh_width_west = gh_width/2.0
+    N_x = 100
+    dx = gh_width_west/100.0
     gh_length = 48 # in feet
     
-    xvalues = np.linspace(0,gh_width,num=gh_width+1) # array for width
+    xvalues = np.linspace(0,(N_x)*dx,N_x+1) # array for width
     yvalues = np.linspace(0,gh_length,num=gh_length+1) # array for height
-    zvalues_west = np.zeros(16) # array for height
+    zvalues_west = np.zeros(N_x+1) # array for height
     
-    for i in range(0,16):
+    for i in range(0,len(xvalues)):
         zvalues_west[i] = 7.29944696 + (1.27415518*xvalues[i]) + (-0.0680139854*xvalues[i]**2) + (0.00152035861*xvalues[i]**3)
         i += 1
+ 
+    roof_slopes_west = np.zeros(N_x+1)
+    roof_lengths = np.zeros(N_x+1)
+
+    total_length_west = 0
+
+    for i in range(1,len(xvalues)):
+        dz = zvalues_west[i] - zvalues_west[i-1]
+        roof_slopes_west[i] = dz/dx
+        roof_lengths[i] = (dz**2 + dx**2)**0.5
+        total_length_west += roof_lengths[i]
     
     zvalues_east = np.flip(zvalues_west, axis=0)
     zvalues_west = zvalues_west[:-1]
     zvalues = np.concatenate((zvalues_west, zvalues_east), axis=0)
     
-    xx, yy = np.meshgrid(xvalues, yvalues)
-    xz, zz = np.meshgrid(xvalues, zvalues)
+    xx, yy = np.meshgrid(xvalues, yvalues)      
     
     plt.plot(xx, yy, marker='.', color='k', linestyle='none')
     plt.axis('equal')
     plt.show() 
+
+    return roof_slopes_west
+
+
+def calc_incidence_angle():
+    """ Calculate incidence angle for every slope agle on greenhouse roof """
+    
+    Delta_r, lat_r, Omega_r, Zenith_r, Azimuth_r, Elev_angle = solar_model()
+    
+    # Beta is equal to angle of tilted surface to horizontal (in radians)
+    roof_slopes_west = section_coordinates()
+    Beta_r = np.arctan(roof_slopes_west) 
+    incidence_angles_west = np.zeros(101)
     
     
-def mesh_size():
-    """
-    Create mesh for sand bed (grow area) in OPV greenhouse
-    """
-    return
+    for i in range(0,len(roof_slopes_west)):
+        incidence_angles_west[i] = np.arccos(np.sin(Delta_r)* np.sin(lat_r) * np.cos(Beta_r[i]) - np.sin(Delta_r) * np.cos(lat_r) * np.sin(Beta_r[i]) * np.cos(Azimuth_r) + np.cos(Delta_r) * np.cos(lat_r) * np.cos(Beta_r[i]) * np.cos(Omega_r) + np.cos(Delta_r) * np.sin(lat_r) * np.sin(Beta_r[i]) * np.cos(Azimuth_r) * np.cos(Omega_r) + np.cos(Delta_r) * np.sin(Beta_r[i]) * np.sin(Azimuth_r) * np.sin(Omega_r))
